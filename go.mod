@@ -6,7 +6,7 @@ tool honnef.co/go/tools/cmd/staticcheck
 
 require (
 	github.com/pquerna/otp v1.5.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 )
 
 require (
