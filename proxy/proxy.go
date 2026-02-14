@@ -244,6 +244,9 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 			if strings.ToLower(name) == "referer" {
 				continue
 			}
+			if strings.ToLower(name) == "accept-encoding" {
+				continue
+			}
 			proxyReq.Header.Add(name, value)
 		}
 	}
