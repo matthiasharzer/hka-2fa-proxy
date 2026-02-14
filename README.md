@@ -15,6 +15,7 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 	 - The `-s` / `--secret` flag is used to specify the OTP secret (Base32 encoded).
 	 - The `-p` / `--port` flag is optional and specifies the port to listen on (default is 8080).
    - The `-t` / `--target` flag is optional and specifies the target URL to proxy to (default is `https://owa.h-ka.de`). See the [confirmed working URLs](#confirmed-working-urls) section below for more details.
+   - The `--skip-initial-auth` flag is optional and specifies whether the initial authentication should be skipped. This can be useful when orchestrating multiple proxies which would invalidate each other's first 2FA code.
 2. To use the proxy, replace the host of the URL with the host of the proxy. Everything after the host remains unchanged. This means that if you want to access `https://owa.h-ka.de/owa/calendar/...`, you would replace `owa.h-ka.de` with `localhost:8080` (or whatever host and port your proxy is running on).
 
 

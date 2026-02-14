@@ -48,11 +48,13 @@ type server struct {
 	mutex         *sync.RWMutex
 }
 
-func NewServer(targetBaseURL, username string, otpGenerator otp.Generator) (http.Handler, error) {
+func NewServer(targetBaseURL, username string, otpGenerator otp.Generator, skipAuth bool) (http.Handler, error) {
 	sv := &server{targetBaseURL: targetBaseURL, otpGenerator: otpGenerator, username: username, mutex: &sync.RWMutex{}}
-	err := sv.authenticateClient()
-	if err != nil {
-		return nil, fmt.Errorf("could not authenticate client: %w", err)
+	if !skipAuth {
+		err := sv.authenticateClient()
+		if err != nil {
+			return nil, fmt.Errorf("could not authenticate client: %w", err)
+		}
 	}
 	return sv, nil
 }
