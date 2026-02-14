@@ -48,11 +48,18 @@ type server struct {
 	mutex         *sync.RWMutex
 }
 
-func NewServer(targetBaseURL, username string, otpGenerator otp.Generator) (http.Handler, error) {
+func NewServer(targetBaseURL, username string, otpGenerator otp.Generator, skipAuth bool) (http.Handler, error) {
 	sv := &server{targetBaseURL: targetBaseURL, otpGenerator: otpGenerator, username: username, mutex: &sync.RWMutex{}}
-	err := sv.authenticateClient()
-	if err != nil {
-		return nil, fmt.Errorf("could not authenticate client: %w", err)
+	if !skipAuth {
+		err := sv.authenticateClient()
+		if err != nil {
+			return nil, fmt.Errorf("could not authenticate client: %w", err)
+		}
+	} else {
+		err := sv.clearCookies()
+		if err != nil {
+			return nil, fmt.Errorf("could not clear cookies: %w", err)
+		}
 	}
 	return sv, nil
 }
@@ -129,14 +136,25 @@ func (s *server) submitLogin(params url.Values, refererURL, username, password s
 	return resp, nil
 }
 
-func (s *server) authenticateClient() error {
-	log.Println("authenticating client")
+func (s *server) clearCookies() error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return fmt.Errorf("could not create cookie jar: %w", err)
 	}
 	s.jar = jar
+	return nil
+}
+
+func (s *server) authenticateClient() error {
+	log.Println("authenticating client")
+
+	err := s.clearCookies()
+	if err != nil {
+		return fmt.Errorf("could not clear cookies: %w", err)
+	}
 
 	loginParams, refererURL, err := s.getLoginParameters()
 	if err != nil {

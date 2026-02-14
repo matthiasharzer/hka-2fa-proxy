@@ -15,6 +15,7 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 	 - The `-s` / `--secret` flag is used to specify the OTP secret (Base32 encoded).
 	 - The `-p` / `--port` flag is optional and specifies the port to listen on (default is 8080).
    - The `-t` / `--target` flag is optional and specifies the target URL to proxy to (default is `https://owa.h-ka.de`). See the [confirmed working URLs](#confirmed-working-urls) section below for more details.
+   - The `--skip-initial-auth` flag is optional and specifies whether the initial authentication should be skipped. This can be useful when orchestrating multiple proxies which would invalidate each other's first 2FA code.
 2. To use the proxy, replace the host of the URL with the host of the proxy. Everything after the host remains unchanged. This means that if you want to access `https://owa.h-ka.de/owa/calendar/...`, you would replace `owa.h-ka.de` with `localhost:8080` (or whatever host and port your proxy is running on).
 
 
@@ -23,3 +24,28 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 - `https://qis-extern.hs-karlsruhe.de`: The QIS portal of the HKA. 
 
 Other URLs may work but have not been tested yet. If you want to use the proxy with a different URL, you can specify it with the `-t` / `--target` flag when starting the proxy.
+
+## Example Docker Compose configuration
+This is an example `docker-compose.yml` file that sets up two proxies, one for the OWA and one for the QIS portal. Make sure to replace the OTP secrets with your own.
+```yaml
+services:
+  owa-proxy:
+    image: ghcr.io/matthiasharzer/hka-2fa-proxy:latest
+    container_name: owa-proxy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+    command: run -p 8080 -u <your-rz-username> -s <your-base32-encoded-2fa-secret> -t "https://owa.h-ka.de" --skip-initial-auth
+
+  qis-proxy:
+    image: ghcr.io/matthiasharzer/hka-2fa-proxy:latest
+    container_name: qis-proxy
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+
+    command: run -p 8080 -u <your-rz-username> -s <your-base32-encoded-2fa-secret> -t "https://qis-extern.hs-karlsruhe.de" --skip-initial-auth
+
+```
+> Note: The `--skip-initial-auth` flag is used in this example to prevent the proxies from invalidating each other's first 2FA code.

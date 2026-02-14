@@ -16,12 +16,14 @@ var username string
 var otpSecret string
 var port int
 var targetURL string
+var skipInitialAuth bool
 
 func init() {
 	Command.Flags().StringVarP(&username, "username", "u", "", "The username to use for authentication")
 	Command.Flags().StringVarP(&otpSecret, "secret", "s", "", "The OTP-secret to use for generating the OTPs")
 	Command.Flags().IntVarP(&port, "port", "p", 8080, "The port to run the proxy on")
 	Command.Flags().StringVarP(&targetURL, "target", "t", "https://owa.h-ka.de", "The target url to proxy to")
+	Command.Flags().BoolVarP(&skipInitialAuth, "skip-initial-auth", "", false, "Whether to skip the initial authentication when starting the proxy")
 }
 
 var Command = &cobra.Command{
@@ -45,9 +47,9 @@ var Command = &cobra.Command{
 			targetURL = targetURL[:len(targetURL)-1]
 		}
 
-		server, err := proxy.NewServer(targetURL, username, generator)
+		server, err := proxy.NewServer(targetURL, username, generator, skipInitialAuth)
 		if err != nil {
-			return err
+			return fmt.Errorf("initial authentication failed: %w", err)
 		}
 
 		log.Printf("starting server on port %d\n", port)
