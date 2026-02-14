@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -215,6 +216,12 @@ func (s *server) doRequest(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+func (s *server) replaceHTMLContent(body string) string {
+	newBody := strings.ReplaceAll(body, fmt.Sprintf(`action="%s/`, s.targetBaseURL), `action="/`)
+	newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), `href="/`)
+	return newBody
+}
+
 func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -235,6 +242,9 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 				continue
 			}
 			if strings.ToLower(name) == "referer" {
+				continue
+			}
+			if strings.ToLower(name) == "accept-encoding" {
 				continue
 			}
 			proxyReq.Header.Add(name, value)
@@ -260,7 +270,7 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	contentType := resp.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/html") {
 		// Quick and dirty way to rewrite URLs in form action attributes and links
-		responseBodyNew := strings.ReplaceAll(responseBody, s.targetBaseURL+"/", "/")
+		responseBodyNew := s.replaceHTMLContent(responseBody)
 		responseBodyBytes = []byte(responseBodyNew)
 	}
 
@@ -301,7 +311,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err := s.proxyRequest(w, r)
 	if err != nil {
-		if errors.As(err, &http.ErrHandlerTimeout) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			http.Error(w, "request timed out: "+err.Error(), http.StatusGatewayTimeout)
 			return
 		}
