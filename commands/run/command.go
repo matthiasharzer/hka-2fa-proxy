@@ -48,7 +48,7 @@ var Command = &cobra.Command{
 		}
 
 		server, err := proxy.NewServer(targetURL, username, generator, skipInitialAuth)
-		if err == nil {
+		if err != nil {
 			return fmt.Errorf("initial authentication failed: %w", err)
 		}
 
