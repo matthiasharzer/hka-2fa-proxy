@@ -19,7 +19,7 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 
 
 ### Confirmed working URLs
-- *`https://owa.h-ka.de`*: The webmail interface of the HKA. This is the primary use case for this proxy, as it allows you to access your email without needing to enter an OTP every time.
-- *`https://qis-extern.hs-karlsruhe.de`*: The QIS portal of the HKA. 
+- `https://owa.h-ka.de`: The webmail interface of the HKA. This is the primary use case for this proxy, as it allows you to access your email without needing to enter an OTP every time.
+- `https://qis-extern.hs-karlsruhe.de`: The QIS portal of the HKA. 
 
 Other URLs may work but have not been tested yet. If you want to use the proxy with a different URL, you can specify it with the `-t` / `--target` flag when starting the proxy.
