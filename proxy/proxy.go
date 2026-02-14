@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -307,7 +308,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err := s.proxyRequest(w, r)
 	if err != nil {
-		if errors.As(err, &http.ErrHandlerTimeout) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			http.Error(w, "request timed out: "+err.Error(), http.StatusGatewayTimeout)
 			return
 		}
