@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,15 +40,15 @@ func isRedirectToLogin(response *http.Response) bool {
 }
 
 type server struct {
-	otpGenerator otp.Generator
-	targetHost   string
-	username     string
-	jar          *cookiejar.Jar
-	mutex        *sync.RWMutex
+	otpGenerator  otp.Generator
+	targetBaseURL string
+	username      string
+	jar           *cookiejar.Jar
+	mutex         *sync.RWMutex
 }
 
-func NewServer(targetHost, username string, otpGenerator otp.Generator) (http.Handler, error) {
-	sv := &server{targetHost: targetHost, otpGenerator: otpGenerator, username: username, mutex: &sync.RWMutex{}}
+func NewServer(targetBaseURL, username string, otpGenerator otp.Generator) (http.Handler, error) {
+	sv := &server{targetBaseURL: targetBaseURL, otpGenerator: otpGenerator, username: username, mutex: &sync.RWMutex{}}
 	err := sv.authenticateClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not authenticate client: %w", err)
@@ -58,7 +59,7 @@ func NewServer(targetHost, username string, otpGenerator otp.Generator) (http.Ha
 // getLoginParameters performs the initial request to get session cookies and login form parameters.
 func (s *server) getLoginParameters() (url.Values, string, error) {
 	// Create a request so we can set headers
-	initialURL := s.targetHost + "/"
+	initialURL := s.targetBaseURL + "/"
 	req, err := http.NewRequest("GET", initialURL, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("could not create initial request: %w", err)
@@ -92,7 +93,7 @@ func (s *server) getLoginParameters() (url.Values, string, error) {
 		return nil, "", fmt.Errorf("could not parse query parameters: %w", err)
 	}
 
-	refererURL := s.targetHost + locationHeader
+	refererURL := s.targetBaseURL + locationHeader
 	return parsedParams, refererURL, nil
 }
 
@@ -106,7 +107,7 @@ func (s *server) submitLogin(params url.Values, refererURL, username, password s
 	formData.Set("username", strings.TrimSpace(username))
 	formData.Set("password", password)
 
-	postURL := fmt.Sprintf("%s/lm_auth_proxy?LMLogon", s.targetHost)
+	postURL := fmt.Sprintf("%s/lm_auth_proxy?LMLogon", s.targetBaseURL)
 
 	req, err := http.NewRequest("POST", postURL, strings.NewReader(formData.Encode()))
 	if err != nil {
@@ -222,7 +223,7 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	bodyString := string(bodyBytes)
 
 	// Create a new request based on the original one
-	proxyReq, err := http.NewRequest(r.Method, s.targetHost+r.RequestURI, strings.NewReader(bodyString))
+	proxyReq, err := http.NewRequest(r.Method, s.targetBaseURL+r.RequestURI, strings.NewReader(bodyString))
 	if err != nil {
 		return err
 	}
@@ -240,7 +241,7 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	proxyReq.Header.Set("User-Agent", userAgent)
-	proxyReq.Header.Set("Origin", s.targetHost)
+	proxyReq.Header.Set("Origin", s.targetBaseURL)
 
 	// Perform the request
 	resp, err := s.doRequest(proxyReq)
@@ -256,6 +257,13 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 	responseBody := string(responseBodyBytes)
 
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "text/html") {
+		// Quick and dirty way to rewrite URLs in form action attributes and links
+		responseBodyNew := strings.ReplaceAll(responseBody, s.targetBaseURL+"/", "/")
+		responseBodyBytes = []byte(responseBodyNew)
+	}
+
 	if isLoginPage(responseBody) || isRedirectToLogin(resp) {
 		return fmt.Errorf("not logged in anymore")
 	}
@@ -269,11 +277,13 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		location := resp.Header.Get("Location")
-		if strings.HasPrefix(location, s.targetHost) {
-			location = strings.TrimPrefix(location, s.targetHost)
+		if strings.HasPrefix(location, s.targetBaseURL) {
+			location = strings.TrimPrefix(location, s.targetBaseURL)
 			w.Header().Set("Location", location)
 		}
 	}
+
+	w.Header().Set("Content-Length", strconv.Itoa(len(responseBodyBytes)))
 
 	// Write the status code
 	w.WriteHeader(resp.StatusCode)
@@ -306,6 +316,4 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "proxy error after re-authentication: "+err.Error(), http.StatusBadGateway)
 		}
 	}
-
-	log.Printf("request proxied successfully: %s %s", r.Method, r.URL.String())
 }

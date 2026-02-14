@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/MatthiasHarzer/hka-2fa-proxy/otp"
 	"github.com/MatthiasHarzer/hka-2fa-proxy/proxy"
@@ -14,11 +15,13 @@ import (
 var username string
 var otpSecret string
 var port int
+var targetURL string
 
 func init() {
 	Command.Flags().StringVarP(&username, "username", "u", "", "The username to use for authentication")
 	Command.Flags().StringVarP(&otpSecret, "secret", "s", "", "The OTP-secret to use for generating the OTPs")
 	Command.Flags().IntVarP(&port, "port", "p", 8080, "The port to run the proxy on")
+	Command.Flags().StringVarP(&targetURL, "target", "t", "https://owa.h-ka.de", "The target url to proxy to")
 }
 
 var Command = &cobra.Command{
@@ -38,7 +41,11 @@ var Command = &cobra.Command{
 			return err
 		}
 
-		server, err := proxy.NewServer("https://owa.h-ka.de", username, generator)
+		if strings.HasSuffix(targetURL, "/") {
+			targetURL = targetURL[:len(targetURL)-1]
+		}
+
+		server, err := proxy.NewServer(targetURL, username, generator)
 		if err != nil {
 			return err
 		}
