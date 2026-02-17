@@ -16,6 +16,7 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 	 - The `-p` / `--port` flag is optional and specifies the port to listen on (default is 8080).
    - The `-t` / `--target` flag is optional and specifies the target URL to proxy to (default is `https://owa.h-ka.de`). See the [confirmed working URLs](#confirmed-working-urls) section below for more details.
    - The `--skip-initial-auth` flag is optional and specifies whether the initial authentication should be skipped. This can be useful when orchestrating multiple proxies which would invalidate each other's first 2FA code.
+   - THe `--auth-key` flag is optional and specifies a key that must be provided in the URL to access the proxy. See the [security considerations](#security-considerations) section below for more details.
 2. To use the proxy, replace the host of the URL with the host of the proxy. Everything after the host remains unchanged. This means that if you want to access `https://owa.h-ka.de/owa/calendar/...`, you would replace `owa.h-ka.de` with `localhost:8080` (or whatever host and port your proxy is running on).
 
 
@@ -24,6 +25,13 @@ Download the [latest release](https://github.com/MatthiasHarzer/hka-2fa-proxy/re
 - `https://qis-extern.hs-karlsruhe.de`: The QIS portal of the HKA. 
 
 Other URLs may work but have not been tested yet. If you want to use the proxy with a different URL, you can specify it with the `-t` / `--target` flag when starting the proxy.
+
+### Security considerations
+To prevent anyone from accessing the proxy, thus generating OTP codes and stressing the HKA's authentication servers, you can use the `--auth-key` flag to specify a key that must be provided in the URL to access the proxy. 
+
+The key is provided in the first two URL path segments using `/_/<auth-key>/...`. For example, if you start the proxy with `hka-2fa-proxy run -u <rz-username> -s <otp-secret> --auth-key mysecretkey`, you would access the OWA at `http://localhost:8080/_/mysecretkey/owa/calendar/...`. Any request that does not include the correct key in the URL will be rejected with a 401 Unauthorized response.
+
+> Note: This is a experimental feature and may not work correctly since rewriting the URL path is not as straightforward as it seems. 
 
 ## Example Docker Compose configuration
 This is an example `docker-compose.yml` file that sets up two proxies, one for the OWA and one for the QIS portal. Make sure to replace the OTP secrets with your own.
