@@ -45,11 +45,18 @@ type server struct {
 	targetBaseURL string
 	username      string
 	jar           *cookiejar.Jar
-	mutex         *sync.RWMutex
+	jarMutex      *sync.RWMutex
+	authKey       string
 }
 
-func NewServer(targetBaseURL, username string, otpGenerator otp.Generator, skipAuth bool) (http.Handler, error) {
-	sv := &server{targetBaseURL: targetBaseURL, otpGenerator: otpGenerator, username: username, mutex: &sync.RWMutex{}}
+func NewServer(targetBaseURL, username string, otpGenerator otp.Generator, skipAuth bool, authKey string) (http.Handler, error) {
+	sv := &server{
+		targetBaseURL: targetBaseURL,
+		otpGenerator:  otpGenerator,
+		username:      username,
+		jarMutex:      &sync.RWMutex{},
+		authKey:       authKey,
+	}
 	if !skipAuth {
 		err := sv.authenticateClient()
 		if err != nil {
@@ -137,8 +144,8 @@ func (s *server) submitLogin(params url.Values, refererURL, username, password s
 }
 
 func (s *server) clearCookies() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.jarMutex.Lock()
+	defer s.jarMutex.Unlock()
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -181,8 +188,8 @@ func (s *server) authenticateClient() error {
 }
 
 func (s *server) getHttpClient(url *url.URL) (*http.Client, error) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.jarMutex.RLock()
+	defer s.jarMutex.RUnlock()
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -211,8 +218,8 @@ func (s *server) saveCookiesFromResponse(url *url.URL, resp *http.Response) {
 		return
 	}
 
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.jarMutex.Lock()
+	defer s.jarMutex.Unlock()
 
 	for _, cookie := range cookies {
 		s.jar.SetCookies(url, []*http.Cookie{cookie})
@@ -235,12 +242,70 @@ func (s *server) doRequest(req *http.Request) (*http.Response, error) {
 }
 
 func (s *server) replaceHTMLContent(body string) string {
-	newBody := strings.ReplaceAll(body, fmt.Sprintf(`action="%s/`, s.targetBaseURL), `action="/`)
-	newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), `href="/`)
+	newBody := body
+
+	if s.authKey != "" {
+		// qisserver forward
+		newBody = strings.ReplaceAll(newBody, `URL=/`, fmt.Sprintf(`URL=/_/%s/`, s.authKey))
+
+		// Quick and dirty way to rewrite URLs in form action attributes and links
+		newBody = strings.ReplaceAll(newBody, `action="/`, fmt.Sprintf(`action="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, `href="/`, fmt.Sprintf(`href="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, `src="/`, fmt.Sprintf(`href="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`action="%s/`, s.targetBaseURL), fmt.Sprintf(`action="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), fmt.Sprintf(`href="/_/%s/`, s.authKey))
+	} else {
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`action="%s/`, s.targetBaseURL), `action="/`)
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), `href="/`)
+	}
+
 	return newBody
 }
 
+func (s *server) isAuthorizedRequest(r *http.Request) bool {
+	if s.authKey == "" {
+		return true
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+
+	if len(parts) > 2 && parts[2] == s.authKey {
+		return true
+	}
+
+	return false
+}
+
+func (s *server) resolveTargetRequestURI(r *http.Request) (string, error) {
+	if s.authKey == "" {
+		return r.RequestURI, nil
+	}
+	parts := strings.Split(r.RequestURI, "/")
+
+	if len(parts) > 2 && parts[2] == s.authKey {
+		return "/" + strings.Join(parts[3:], "/"), nil
+	}
+
+	return "", fmt.Errorf("invalid request URI: %s", r.RequestURI)
+}
+
+func (s *server) getLocation(location string) string {
+	if s.authKey == "" {
+		return strings.TrimPrefix(location, s.targetBaseURL)
+	}
+	return "/_/" + s.authKey + strings.TrimPrefix(location, s.targetBaseURL)
+}
+
 func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
+	if !s.isAuthorizedRequest(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return nil
+	}
+	requestURI, err := s.resolveTargetRequestURI(r)
+	if err != nil {
+		return fmt.Errorf("could not resolve target request URI: %w", err)
+	}
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		return fmt.Errorf("could not read request body: %w", err)
@@ -248,7 +313,7 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	bodyString := string(bodyBytes)
 
 	// Create a new request based on the original one
-	proxyReq, err := http.NewRequest(r.Method, s.targetBaseURL+r.RequestURI, strings.NewReader(bodyString))
+	proxyReq, err := http.NewRequest(r.Method, s.targetBaseURL+requestURI, strings.NewReader(bodyString))
 	if err != nil {
 		return err
 	}
@@ -305,10 +370,8 @@ func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		location := resp.Header.Get("Location")
-		if strings.HasPrefix(location, s.targetBaseURL) {
-			location = strings.TrimPrefix(location, s.targetBaseURL)
-			w.Header().Set("Location", location)
-		}
+		location = s.getLocation(location)
+		w.Header().Set("Location", location)
 	}
 
 	w.Header().Set("Content-Length", strconv.Itoa(len(responseBodyBytes)))
@@ -329,6 +392,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err := s.proxyRequest(w, r)
 	if err != nil {
+		log.Printf("error proxying request: %v", err)
+
 		if errors.Is(err, context.DeadlineExceeded) {
 			http.Error(w, "request timed out: "+err.Error(), http.StatusGatewayTimeout)
 			return
@@ -336,11 +401,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		err = s.authenticateClient()
 		if err != nil {
+			log.Printf("re-authentication failed: %v", err)
 			http.Error(w, "re-authentication failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		err = s.proxyRequest(w, r)
 		if err != nil {
+			log.Printf("proxy error after re-authentication: %v", err)
 			http.Error(w, "proxy error after re-authentication: "+err.Error(), http.StatusBadGateway)
 		}
 	}
