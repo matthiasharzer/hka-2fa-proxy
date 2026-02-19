@@ -33,7 +33,8 @@ The key is provided in the first two URL path segments using `/_/<auth-key>/...`
 
 > Note: This is an experimental feature and may not work correctly since rewriting the URL path is not as straightforward as it seems.
 
-> **Security warning:** The `--auth-key` value is embedded in the URL path (e.g. `/_/<auth-key>/...`), which means it will appear in browser history, server/access logs, and `Referer` headers sent to external sites. Treat it as a convenience measure rather than a strong security boundary; do not reuse it as a sensitive password.
+> [!WARNING]
+> The `--auth-key` value is embedded in the URL path (e.g. `/_/<auth-key>/...`), which means it will appear in browser history, server/access logs, and `Referer` headers sent to external sites. Treat it as a convenience measure rather than a strong security boundary; do not reuse it as a sensitive password.
 
 ## Example Docker Compose configuration
 This is an example `docker-compose.yml` file that sets up two proxies, one for the OWA and one for the QIS portal. Make sure to replace the OTP secrets with your own.
