@@ -315,15 +315,20 @@ func (s *server) resolveTargetRequestURI(r *http.Request) (string, error) {
 
 func (s *server) getLocation(location string) string {
 	// If the location is an absolute URL under the target base URL, strip the base.
+	// Verify the match is at a valid URL component boundary (trimmed must be empty,
+	// or start with '/', '?', or '#') to prevent prefix confusion with similar hostnames
+	// (e.g. targetBaseURL "https://owa.h-ka.de" matching "https://owa.h-ka.deception.com").
 	if strings.HasPrefix(location, s.targetBaseURL) {
 		trimmed := strings.TrimPrefix(location, s.targetBaseURL)
-		if trimmed == "" {
-			trimmed = "/"
+		if trimmed == "" || trimmed[0] == '/' || trimmed[0] == '?' || trimmed[0] == '#' {
+			if trimmed == "" {
+				trimmed = "/"
+			}
+			if s.authKey == "" {
+				return trimmed
+			}
+			return "/_/" + s.authKey + trimmed
 		}
-		if s.authKey == "" {
-			return trimmed
-		}
-		return "/_/" + s.authKey + trimmed
 	}
 
 	// For relative paths (starting with '/'), rewrite them to pass through the proxy.
