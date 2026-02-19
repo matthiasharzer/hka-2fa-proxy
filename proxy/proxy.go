@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,13 @@ import (
 
 	"github.com/MatthiasHarzer/hka-2fa-proxy/otp"
 )
+
+// validAuthKey matches only safe characters for use in a URL path segment.
+var validAuthKey = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// errUnauthorized is returned by proxyRequest when the request lacks a valid auth key.
+// The HTTP 401 response has already been written to the client at that point.
+var errUnauthorized = errors.New("unauthorized")
 
 const (
 	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
@@ -50,6 +58,9 @@ type server struct {
 }
 
 func NewServer(targetBaseURL, username string, otpGenerator otp.Generator, skipAuth bool, authKey string) (http.Handler, error) {
+	if authKey != "" && !validAuthKey.MatchString(authKey) {
+		return nil, fmt.Errorf("authKey must contain only alphanumeric characters, hyphens, and underscores")
+	}
 	sv := &server{
 		targetBaseURL: targetBaseURL,
 		otpGenerator:  otpGenerator,
@@ -251,12 +262,14 @@ func (s *server) replaceHTMLContent(body string) string {
 		// Quick and dirty way to rewrite URLs in form action attributes and links
 		newBody = strings.ReplaceAll(newBody, `action="/`, fmt.Sprintf(`action="/_/%s/`, s.authKey))
 		newBody = strings.ReplaceAll(newBody, `href="/`, fmt.Sprintf(`href="/_/%s/`, s.authKey))
-		newBody = strings.ReplaceAll(newBody, `src="/`, fmt.Sprintf(`href="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, `src="/`, fmt.Sprintf(`src="/_/%s/`, s.authKey))
 		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`action="%s/`, s.targetBaseURL), fmt.Sprintf(`action="/_/%s/`, s.authKey))
 		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), fmt.Sprintf(`href="/_/%s/`, s.authKey))
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`src="%s/`, s.targetBaseURL), fmt.Sprintf(`src="/_/%s/`, s.authKey))
 	} else {
 		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`action="%s/`, s.targetBaseURL), `action="/`)
 		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`href="%s/`, s.targetBaseURL), `href="/`)
+		newBody = strings.ReplaceAll(newBody, fmt.Sprintf(`src="%s/`, s.targetBaseURL), `src="/`)
 	}
 
 	return newBody
@@ -269,7 +282,7 @@ func (s *server) isAuthorizedRequest(r *http.Request) bool {
 
 	parts := strings.Split(r.URL.Path, "/")
 
-	if len(parts) > 2 && parts[2] == s.authKey {
+	if len(parts) > 2 && parts[1] == "_" && parts[2] == s.authKey {
 		return true
 	}
 
@@ -278,28 +291,57 @@ func (s *server) isAuthorizedRequest(r *http.Request) bool {
 
 func (s *server) resolveTargetRequestURI(r *http.Request) (string, error) {
 	if s.authKey == "" {
-		return r.RequestURI, nil
+		uri := r.URL.Path
+		if r.URL.RawQuery != "" {
+			uri = uri + "?" + r.URL.RawQuery
+		}
+		return uri, nil
 	}
-	parts := strings.Split(r.RequestURI, "/")
+	parts := strings.Split(r.URL.Path, "/")
 
-	if len(parts) > 2 && parts[2] == s.authKey {
-		return "/" + strings.Join(parts[3:], "/"), nil
+	if len(parts) == 3 && parts[1] == "_" && parts[2] == s.authKey {
+		return "/", nil
+	}
+	if len(parts) > 3 && parts[1] == "_" && parts[2] == s.authKey {
+		path := "/" + strings.Join(parts[3:], "/")
+		if r.URL.RawQuery != "" {
+			path = path + "?" + r.URL.RawQuery
+		}
+		return path, nil
 	}
 
 	return "", fmt.Errorf("invalid request URI: %s", r.RequestURI)
 }
 
 func (s *server) getLocation(location string) string {
-	if s.authKey == "" {
-		return strings.TrimPrefix(location, s.targetBaseURL)
+	// If the location is an absolute URL under the target base URL, strip the base.
+	if strings.HasPrefix(location, s.targetBaseURL) {
+		trimmed := strings.TrimPrefix(location, s.targetBaseURL)
+		if trimmed == "" {
+			trimmed = "/"
+		}
+		if s.authKey == "" {
+			return trimmed
+		}
+		return "/_/" + s.authKey + trimmed
 	}
-	return "/_/" + s.authKey + strings.TrimPrefix(location, s.targetBaseURL)
+
+	// For relative paths (starting with '/'), rewrite them to pass through the proxy.
+	if strings.HasPrefix(location, "/") {
+		if s.authKey == "" {
+			return location
+		}
+		return "/_/" + s.authKey + location
+	}
+
+	// For other absolute URLs or unusual values, return as-is to avoid creating malformed URLs.
+	return location
 }
 
 func (s *server) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	if !s.isAuthorizedRequest(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return nil
+		return errUnauthorized
 	}
 	requestURI, err := s.resolveTargetRequestURI(r)
 	if err != nil {
@@ -393,6 +435,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err := s.proxyRequest(w, r)
 	if err != nil {
 		log.Printf("error proxying request: %v", err)
+
+		if errors.Is(err, errUnauthorized) {
+			// Response already written; no re-authentication needed for wrong auth keys.
+			return
+		}
 
 		if errors.Is(err, context.DeadlineExceeded) {
 			http.Error(w, "request timed out: "+err.Error(), http.StatusGatewayTimeout)
