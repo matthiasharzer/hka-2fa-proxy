@@ -9,7 +9,7 @@ A lightweight proxy that handles 2FA authentication for HKA IT services automati
 
 ### Docker (recommended)
 
-The easiest way to run the proxy is with Docker. A pre-built image is available on the GitHub Container Registry.
+The easiest way to run the proxy is with Docker. A pre-built image is available on the [GitHub Container Registry](https://ghcr.io/matthiasharzer/hka-2fa-proxy).
 
 #### Docker Compose
 
