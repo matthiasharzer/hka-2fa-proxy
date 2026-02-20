@@ -20,5 +20,6 @@ jobs:
         with:
           types: |
             chore
+            docs
             feat
             fix
