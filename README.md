@@ -37,6 +37,9 @@ services:
 > [!NOTE]
 > The `--skip-initial-auth` flag prevents multiple proxies from invalidating each other's first 2FA code on startup.
 
+> [!IMPORTANT]
+> TOTP/2FA codes are **one-time passwords**. When running multiple proxies configured with the same TOTP secret, each proxy independently generates the same time-based codes within the same 30-second window. If two services attempt authentication using the same code, only the first will succeed — the second will fail because that code has already been consumed. To minimise this risk, stagger service startup or avoid triggering simultaneous authentication across multiple proxies.
+
 #### Docker CLI
 
 ```bash
