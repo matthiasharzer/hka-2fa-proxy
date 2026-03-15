@@ -37,6 +37,9 @@ services:
 > [!NOTE]
 > The `--skip-initial-auth` flag prevents multiple proxies from invalidating each other's first 2FA code on startup.
 
+> [!IMPORTANT]
+> OTP codes are **one-time use**. When running multiple proxies with the same OTP secret, both instances share the same time-based code generator and will produce identical codes within the same 30-second window. If two services attempt authentication at the same time, only the first will succeed — the second will fail because the code was already consumed. To minimise this risk, stagger service startup or avoid triggering simultaneous authentication across multiple proxies.
+
 #### Docker CLI
 
 ```bash
