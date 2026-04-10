@@ -22,3 +22,13 @@ updates:
   - Dependencies
   commit-message:
     prefix: chore
+
+- package-ecosystem: "docker"
+  directory: "/"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+  labels:
+    - Dependencies
+  commit-message:
+    prefix: chore
