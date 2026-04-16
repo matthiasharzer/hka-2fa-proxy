@@ -1,4 +1,4 @@
-FROM golang:1.26.0-alpine3.22 as build
+FROM golang:1.26.2-alpine3.22 as build
 
 ARG version
 
