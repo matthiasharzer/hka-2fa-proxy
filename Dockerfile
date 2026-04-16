@@ -1,4 +1,4 @@
-FROM golang:1.26.0-alpine3.22 as build
+FROM golang:1.26.2-alpine3.23 as build
 
 ARG version
 
@@ -24,7 +24,7 @@ RUN go build \
 		-o ../bin/hka-2fa-proxy \
 		.
 
-FROM alpine:3.23.3
+FROM alpine:3.23
 
 COPY --from=build /go/bin/hka-2fa-proxy /usr/local/bin/hka-2fa-proxy
 
