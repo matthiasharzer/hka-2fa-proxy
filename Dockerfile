@@ -24,7 +24,7 @@ RUN go build \
 		-o ../bin/hka-2fa-proxy \
 		.
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 COPY --from=build /go/bin/hka-2fa-proxy /usr/local/bin/hka-2fa-proxy
 
