@@ -6,7 +6,7 @@ on:
         description: "Force bump version (major, minor, patch)"
         required: true
         type: choice
-        default: ""
+        default: patch
         options:
           - major
           - minor
@@ -16,6 +16,9 @@ on:
         required: true
         type: string
         default: "trigger release"
+
+permissions:
+  contents: write
 
 jobs:
   validate-branch:
