@@ -13,10 +13,25 @@ on:
           - patch
 
 jobs:
+  validate-branch:
+    name: Validate branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check branch
+        id: check-branch
+        run: |
+          if [[ "${{ github.ref_name }}" != "main" ]]; then
+            echo "::error title=Branch validation failed::This workflow can only be run on the main branch."
+            exit 1
+          fi
+
   force-bump-version:
     name: Force bump version
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: validate-branch
 
     steps:
       - name: Clone repository
@@ -39,3 +54,6 @@ jobs:
         if: ${{inputs.force-bump-version == 'major'}}
         run: |
           git commit --allow-empty -m "feat!: trigger release"
+      - name: Push changes
+        run: |
+          git push origin HEAD:main
