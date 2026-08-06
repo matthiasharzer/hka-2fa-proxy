@@ -1,0 +1,41 @@
+name: manual-release.yml
+on:
+  workflow_dispatch:
+    inputs:
+      force-bump-version:
+        description: "Force bump version (major, minor, patch)"
+        required: true
+        type: choice
+        default: ""
+        options:
+          - major
+          - minor
+          - patch
+
+jobs:
+  force-bump-version:
+    name: Force bump version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: "0"
+      - name: Configure git
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+      - name: Create patch version bump
+        if: ${{inputs.force-bump-version == 'patch'}}
+        run: |
+          git commit --allow-empty -m "fix: trigger release"
+      - name: Create minor version bump
+        if: ${{inputs.force-bump-version == 'minor'}}
+        run: |
+          git commit --allow-empty -m "feat: trigger release"
+      - name: Create major version bump
+        if: ${{inputs.force-bump-version == 'major'}}
+        run: |
+          git commit --allow-empty -m "feat!: trigger release"
