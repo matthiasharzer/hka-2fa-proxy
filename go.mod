@@ -1,6 +1,6 @@
 module github.com/MatthiasHarzer/hka-2fa-proxy
 
-go 1.26.4
+go 1.26.5
 
 tool honnef.co/go/tools/cmd/staticcheck
 
