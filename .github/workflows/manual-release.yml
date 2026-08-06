@@ -11,6 +11,11 @@ on:
           - major
           - minor
           - patch
+      bump-message:
+        description: "Bump message"
+        required: true
+        type: string
+        default: "trigger release"
 
 jobs:
   validate-branch:
@@ -45,15 +50,15 @@ jobs:
       - name: Create patch version bump
         if: ${{inputs.force-bump-version == 'patch'}}
         run: |
-          git commit --allow-empty -m "fix: trigger release"
+          git commit --allow-empty -m "fix: ${{inputs.bump-message}}"
       - name: Create minor version bump
         if: ${{inputs.force-bump-version == 'minor'}}
         run: |
-          git commit --allow-empty -m "feat: trigger release"
+          git commit --allow-empty -m "feat: ${{inputs.bump-message}}"
       - name: Create major version bump
         if: ${{inputs.force-bump-version == 'major'}}
         run: |
-          git commit --allow-empty -m "feat!: trigger release"
+          git commit --allow-empty -m "feat!: ${{inputs.bump-message}}"
       - name: Push changes
         run: |
           git push origin HEAD:main
