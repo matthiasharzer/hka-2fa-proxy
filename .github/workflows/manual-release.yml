@@ -1,4 +1,4 @@
-name: manual-release.yml
+name: Trigger Manual Release
 on:
   workflow_dispatch:
     inputs:
@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-branch
+    env:
+      BUMP_MESSAGE: ${{ github.event.inputs.bump-message }}
 
     steps:
       - name: Clone repository
@@ -53,15 +55,15 @@ jobs:
       - name: Create patch version bump
         if: ${{inputs.force-bump-version == 'patch'}}
         run: |
-          git commit --allow-empty -m "fix: ${{inputs.bump-message}}"
+          git commit --allow-empty -m "fix: $BUMP_MESSAGE"
       - name: Create minor version bump
         if: ${{inputs.force-bump-version == 'minor'}}
         run: |
-          git commit --allow-empty -m "feat: ${{inputs.bump-message}}"
+          git commit --allow-empty -m "feat: $BUMP_MESSAGE"
       - name: Create major version bump
         if: ${{inputs.force-bump-version == 'major'}}
         run: |
-          git commit --allow-empty -m "feat!: ${{inputs.bump-message}}"
+          git commit --allow-empty -m "feat!: $BUMP_MESSAGE"
       - name: Push changes
         run: |
           git push origin HEAD:main
