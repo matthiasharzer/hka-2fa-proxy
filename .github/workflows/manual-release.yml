@@ -1,4 +1,4 @@
-name: manual-release.yml
+name: Trigger Manual Release
 on:
   workflow_dispatch:
     inputs:
