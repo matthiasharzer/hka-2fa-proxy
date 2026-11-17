@@ -14,7 +14,7 @@ updates:
     allow:
       - dependency-type: direct
     commit-message:
-      prefix: chore
+      prefix: deps
     groups:
       gomod:
         patterns:
@@ -56,7 +56,7 @@ updates:
     labels:
       - Dependencies
     commit-message:
-      prefix: chore
+      prefix: deps
     groups:
       docker:
         patterns:
